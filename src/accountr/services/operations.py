@@ -1,107 +1,25 @@
-from typing import (
-    List,
-    Optional,
-)
-
-from fastapi import (
-    Depends,
-    HTTPException,
-    status,
-)
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
-
-from .. import (
-    models,
-    tables,
-)
+from .. import tables, models
 from ..database import get_session
-
-
+from ..wallets import WalletsService
 class OperationsService:
     def __init__(self, session: Session = Depends(get_session)):
         self.session = session
-
-    def get_many(self, user_id: int) -> List[tables.Operation]:
-        operations = (
-            self.session
-            .query(tables.Operation)
-            .filter(tables.Operation.user_id == user_id)
-            .order_by(
-                tables.Operation.date.desc(),
-                tables.Operation.id.desc(),
-            )
-            .all()
-        )
-        return operations
-
-    def get(
-        self,
-        user_id: int,
-        operation_id: int
-    ) -> tables.Operation:
-        operation = self._get(user_id, operation_id)
-        return operation
-
-    def create_many(
-        self,
-        user_id: int,
-        operations_data: List[models.OperationCreate],
-    ) -> List[tables.Operation]:
-        operations = [
-            tables.Operation(
-                **operation_data.dict(),
-                user_id=user_id,
-            )
-            for operation_data in operations_data
-        ]
-        self.session.add_all(operations)
-        self.session.commit()
-        return operations
-
-    def create(
-        self,
-        user_id: int,
-        operation_data: models.OperationCreate,
-    ) -> tables.Operation:
+        self.wallets_service = WalletsService(session)
+    def create(        self,
+        user_id: int,        operation_data: models.OperationCreate,
+    ) -> tables.Operation:        # Создаем операцию
         operation = tables.Operation(
-            **operation_data.dict(),
-            user_id=user_id,
-        )
+            **operation_data.dict(), user_id=user_id,)
         self.session.add(operation)
         self.session.commit()
-        return operation
-
-    def update(
-        self,
-        user_id: int,
-        operation_id: int,
-        operation_data: models.OperationUpdate,
-    ) -> tables.Operation:
-        operation = self._get(user_id, operation_id)
-        for field, value in operation_data:
-            setattr(operation, field, value)
+        # Обновляем общую сумму кошелька        wallet_id = operation_data.wallet_id
+        wallet = self.wallets_service.get_wallet(wallet_id)
+        if operation_data.kind == 'income':            wallet.total_amount += operation_data.amount
+        elif operation_data.kind == 'outcome':
+            if wallet.total_amount < operation_data.amount:
+                raise HTTPException(status_code=400, detail="Insufficient funds in the wallet")
+                wallet.total_amount -= operation_data.amount
         self.session.commit()
-        return operation
-
-    def delete(
-        self,
-        user_id: int,
-        operation_id: int,
-    ):
-        operation = self._get(user_id, operation_id)
-        self.session.delete(operation)
-        self.session.commit()
-
-    def _get(self, user_id: int, operation_id: int) -> Optional[tables.Operation]:
-        operation = (
-            self.session
-            .query(tables.Operation)
-            .filter(
-                tables.Operation.user_id == user_id,
-                tables.Operation.id == operation_id,
-            )
-            .first()
-        )
-        if not operation:
-            raise HTTPException(status.HTTP_404_NOT_FOUND)
         return operation

@@ -1,33 +1,18 @@
+
+# accountr/models/operations.py
 from datetime import date
 from decimal import Decimal
-from enum import Enum
 from typing import Optional
-
 from pydantic import BaseModel
-
-
 class OperationKind(str, Enum):
     INCOME = 'income'
     OUTCOME = 'outcome'
-
-
-class BaseOperation(BaseModel):
+class OperationBase(BaseModel):
     date: date
     kind: OperationKind
     amount: Decimal
     description: Optional[str]
-
-
-class OperationCreate(BaseOperation):
-    pass
-
-
-class OperationUpdate(BaseOperation):
-    pass
-
-
-class Operation(BaseOperation):
+    wallet_id: int
+class OperationCreate(OperationBase):    pass
+class Operation(OperationBase):
     id: int
-
-    class Config:
-        orm_mode = True
